@@ -135,7 +135,7 @@ void UFFmpegDirector::OnBackBufferReady_RenderThread(SWindow& SlateWindow, const
 		{
 			GameTexture = BackBuffer;
 			ticktime -= Video_Tick_Time;
-			Test();			
+			GetScreenVideoData();
 		}
 	}
 }
@@ -146,7 +146,7 @@ bool UFFmpegDirector::AddTickTime(float time)
 	return true;
 }
 
-void UFFmpegDirector::Test()
+void UFFmpegDirector::GetScreenVideoData()
 {
 	uint32 LolStride;
 	FRHICommandListImmediate& ll = GRHICommandList.GetImmediateCommandList();

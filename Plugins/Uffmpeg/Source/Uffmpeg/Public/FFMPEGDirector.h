@@ -70,7 +70,7 @@ private:
 	void Video_Frame_YUV_From_BGR(uint8_t *rgb);
 	void Create_Audio_Swr();
 	void Set_Audio_Volume(AVFrame *frame);
-	void Test();
+	void GetScreenVideoData();
 private:
 
 	double CurrentAuidoTime = 0.0;
