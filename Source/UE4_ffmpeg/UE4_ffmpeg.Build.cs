@@ -13,7 +13,7 @@ public class UE4_ffmpeg : ModuleRules
             "CoreUObject",
             "Engine",
             "InputCore",
-            "Uffmpeg",
+            "UFFmpeg",
             "Slate",
             "RenderCore",
             "SlateCore",

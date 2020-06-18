@@ -9,7 +9,7 @@ extern  "C" {
 
 #define LOCTEXT_NAMESPACE "FUffmpegModule"
 
-void FUffmpegModule::StartupModule()
+void FUFFmpegModule::StartupModule()
 {
 	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
 
@@ -24,7 +24,7 @@ void FUffmpegModule::StartupModule()
 	Initialized = true;
 }
 
-void FUffmpegModule::ShutdownModule()
+void FUFFmpegModule::ShutdownModule()
 {
 	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
 	// we call this function before unloading the module.
@@ -44,7 +44,7 @@ void FUffmpegModule::ShutdownModule()
 	Initialized = false;
 }
 
-void* FUffmpegModule::LoadLibrary(const FString& name, const FString& version)
+void* FUFFmpegModule::LoadLibrary(const FString& name, const FString& version)
 {
 	FString BaseDir = IPluginManager::Get().FindPlugin("Uffmpeg")->GetBaseDir();
 
@@ -76,4 +76,4 @@ void* FUffmpegModule::LoadLibrary(const FString& name, const FString& version)
 
 #undef LOCTEXT_NAMESPACE
 	
-IMPLEMENT_MODULE(FUffmpegModule, Uffmpeg)
+IMPLEMENT_MODULE(FUFFmpegModule, UFFmpeg)

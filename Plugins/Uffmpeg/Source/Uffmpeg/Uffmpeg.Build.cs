@@ -2,7 +2,7 @@
 
 using UnrealBuildTool;
 using System.IO;
-public class Uffmpeg : ModuleRules
+public class UFFmpeg : ModuleRules
 {
     private string ModulePath
     {
@@ -17,7 +17,7 @@ public class Uffmpeg : ModuleRules
         get { return Directory.GetParent(ModulePath).Parent.FullName; }
     }
 
-    public Uffmpeg(ReadOnlyTargetRules Target) : base(Target)
+    public UFFmpeg(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
