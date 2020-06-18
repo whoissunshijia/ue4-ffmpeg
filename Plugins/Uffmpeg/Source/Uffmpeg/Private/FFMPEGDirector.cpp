@@ -340,7 +340,7 @@ void UFFmpegDirector::OnNewSubmixBuffer(const USoundSubmix* OwningSubmix, float*
 
 void UFFmpegDirector::Encode_Video_Frame(uint8_t *rgb)
 {
-	static uint32 Add_Size= width * 4;
+	uint32 Add_Size= width * 4;
 	uint32 Row = 0;
 	uint32 Col = 0;
 	uint8* TextureDataPtr=rgb;
