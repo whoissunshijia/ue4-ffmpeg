@@ -42,7 +42,8 @@ public:
 	virtual ~UFFmpegDirector();
 	UFUNCTION(BlueprintCallable)
 	void Initialize_Director(UWorld* World, FString OutFileName, bool UseGPU, int VideoFps, bool RTMP, int VideoBitRate, float AudioDelay,float SoundVolume);
-	void Begin_Receive_AudioBufferData(UWorld* world);
+	void Begin_Receive_AudioData(UWorld* world);
+	void Begin_Receive_VideoData();
 
 	void Encode_Video_Frame(uint8_t *rgb);
 	void Encode_SetCurrentAudioTime(uint8_t* rgb);
@@ -56,68 +57,69 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void EndPIE(const bool l);
 
-	void WorldChange(UWorld* change_world);
-	void WorldDestory(UWorld* change_world);
-
 	void DestoryDirector();
 	
 public:
 	AVFrame* video_frame;
 	AVFrame* audio_frame;	
 private:
-	void Create_Video_Encoder(bool is_use_NGPU, int fps, const char* out_file_name,int bit_rate);
+	void Create_Video_Encoder(bool is_use_NGPU, const char* out_file_name,int bit_rate);
 	void Create_Audio_Encoder(const char* audioencoder_name);
 	void Video_Frame_YUV_From_BGR(uint8_t *rgb);
 	void Create_Audio_Swr();
-	void Set_Audio_Volume(AVFrame *frame);
 	void GetScreenVideoData();
-private:
 
+	void AddTickFunction();
+	void AddPIEEndFunction();
+	void CreateEncodeThread();
+
+	void AudioFilterAlloc();
+	void SetAudioFilterValue();
+private:
+	bool IsDestory = false;
+
+	int video_fps;
+	uint32 Video_Frame_Duration;
+	float Video_Tick_Time;
 	double CurrentAuidoTime = 0.0;
 	float audio_delay;
 	float audio_volume;
+	int width;
+	int height;
+	FTexture2DRHIRef GameTexture;
+	FAudioDevice* AudioDevice;
+	SWindow* gameWindow;
+	TArray<FColor> TexturePixel;
+	float ticktime = 0.0f;
+	int64_t video_pts = 0;
+	uint8_t* buff_bgr;
+	int32_t video_index;
+	int32_t audio_index;
+
 	FEncoderThread * Runnable;
 	FRunnableThread* RunnableThread;
 
 	AVFormatContext* out_format_context;
-
 	AVCodecContext* video_encoder_codec_context;
 	AVCodecContext* audio_encoder_codec_context;
-
 	AVPacket video_pkt;
 	AVPacket audio_pkt;
 	SwsContext* sws_context;
-
 	AVStream* out_video_stream;
 	AVStream* out_audio_stream;
+	SwrContext* swr;
+	uint8_t* outs[2];
+	const AVFilter* audio_buffersrc;
+	const AVFilter* audio_buffersink;
+	AVFilterInOut* audio_outputs;
+	AVFilterInOut* audio_inputs;
+	AVFilterGraph* audio_filter_graph;
+	AVFilterContext* audio_buffersink_ctx;
+	AVFilterContext* audio_buffersrc_ctx;
+	FString audio_filter_descr;
 
-	int width;
-	int height;
-
-	SwrContext	*swr;
-	uint8_t *outs[2];
-
-	FTexture2DRHIRef GameTexture;
-	SWindow* gameWindow;
-	TArray<FColor> TexturePixel;
-	float ticktime = 0.0f;
-
-	int64_t pts = 0;
-	uint8* buff_rgb;
-
-	int32 video_index;
-	int32 audio_index;
-
-	bool IsDestory = false;
-
-	FTickerDelegate TickDelegate;
 	FDelegateHandle TickDelegateHandle;
 	FDelegateHandle EndPIEDelegateHandle;
 
-	FAudioDevice* AudioDevice;
-	int FPS;
-
-	uint32 Video_Frame_Duration;
-	float Video_Tick_Time;
-
+ 
 };

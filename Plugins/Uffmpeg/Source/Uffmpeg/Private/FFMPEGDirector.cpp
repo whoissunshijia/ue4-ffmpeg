@@ -14,20 +14,29 @@
 #include "Engine/World.h"
 
 UFFmpegDirector::UFFmpegDirector() :
+	AudioDevice(nullptr),
+	gameWindow(nullptr),
+	buff_bgr(nullptr),
 	Runnable(nullptr),
+	RunnableThread(nullptr),
 	out_format_context(nullptr),
 	video_encoder_codec_context(nullptr),
 	audio_encoder_codec_context(nullptr),
 	sws_context(nullptr),
 	out_video_stream(nullptr),
+	out_audio_stream(nullptr),
 	swr(nullptr),
-	gameWindow(nullptr),
-	buff_rgb(nullptr),
-	AudioDevice(nullptr)
+	audio_buffersrc(nullptr),
+	audio_buffersink(nullptr),
+	audio_outputs(nullptr),
+	audio_inputs(nullptr),
+	audio_filter_graph(nullptr),
+	audio_buffersink_ctx(nullptr),
+	audio_buffersrc_ctx(nullptr)
 {
 	outs[0] = nullptr;
 	outs[1] = nullptr;
-	FPS = 0;
+	video_fps = 0;
 }
 
 UFFmpegDirector::~UFFmpegDirector()
@@ -54,7 +63,7 @@ void UFFmpegDirector::DestoryDirector()
 		Encode_Finish();
 		FMemory::Free(outs[0]);
 		FMemory::Free(outs[1]);
-		FMemory::Free(buff_rgb);
+		FMemory::Free(buff_bgr);
 		IsDestory = true;
 	}
 }
@@ -68,7 +77,7 @@ void UFFmpegDirector::EndPIE(const bool l)
 	this->BeginDestroy();
 }
 
-void UFFmpegDirector::Begin_Receive_AudioBufferData(UWorld* world)
+void UFFmpegDirector::Begin_Receive_AudioData(UWorld* world)
 {
 	AudioDevice = world->GetAudioDevice();
 	if (AudioDevice)
@@ -79,22 +88,18 @@ void UFFmpegDirector::Begin_Receive_AudioBufferData(UWorld* world)
 
 void UFFmpegDirector::Initialize_Director(UWorld* World, FString OutFileName, bool UseGPU, int VideoFps, bool RTMP, int VideoBitRate, float AudioDelay, float SoundVolume)
 {
+	avfilter_register_all();
 	av_register_all();
 	avformat_network_init();
 
 	audio_delay = AudioDelay;
-	FPS = VideoFps;	
-	Video_Tick_Time = float(1) / float(FPS);
+	video_fps = VideoFps;
+	Video_Tick_Time = float(1) / float(video_fps);
 	audio_volume = SoundVolume;
-	TickDelegate = FTickerDelegate::CreateUObject(this, &UFFmpegDirector::AddTickTime);
-	TickDelegateHandle = FTicker::GetCoreTicker().AddTicker(TickDelegate);
-	EndPIEDelegateHandle = FEditorDelegates::PrePIEEnded.AddUObject(this, &UFFmpegDirector::EndPIE);
-
 	gameWindow = GEngine->GameViewport->GetWindow().Get();
-	buff_rgb = (uint8_t *)FMemory::Realloc(buff_rgb, 3 * sizeof(uint8_t) * gameWindow->GetViewportSize().X * gameWindow->GetViewportSize().Y);
-
 	width = gameWindow->GetViewportSize().X;
 	height = gameWindow->GetViewportSize().Y;
+	buff_bgr = (uint8_t *)FMemory::Realloc(buff_bgr, 3 * width *height);
 	outs[0] = (uint8_t *)FMemory::Realloc(outs[0], 4096);
 	outs[1] = (uint8_t *)FMemory::Realloc(outs[1], 4096);
 
@@ -112,21 +117,34 @@ void UFFmpegDirector::Initialize_Director(UWorld* World, FString OutFileName, bo
 			check(false);
 		}
 	}
+	//create audio encoder
 	Create_Audio_Swr();
 	Create_Audio_Encoder("aac");
-	Create_Video_Encoder(UseGPU, FPS, TCHAR_TO_ANSI(*OutFileName), VideoBitRate);
-	Runnable = new FEncoderThread();
 
-	Runnable->CreateQueue(4 * width*height, 2048 * sizeof(float), 30, 40);
+	//create video encoder
+	Create_Video_Encoder(UseGPU, TCHAR_TO_ANSI(*OutFileName), VideoBitRate);
 
-	Runnable->GetAudioProcessDelegate().BindUObject(this, &UFFmpegDirector::Encode_Audio_Frame);
-	Runnable->video_encode_delegate.BindUObject(this, &UFFmpegDirector::Encode_Video_Frame);
-	Runnable->GetAudioTimeProcessDelegate().BindUObject(this, &UFFmpegDirector::Encode_SetCurrentAudioTime);
-	RunnableThread = FRunnableThread::Create(Runnable, TEXT("EncoderThread"));
+	//initialize and set vlalue of audio filter
+	AudioFilterAlloc();
+	SetAudioFilterValue();
 
-	FSlateApplication::Get().GetRenderer()->OnBackBufferReadyToPresent().AddUObject(this, &UFFmpegDirector::OnBackBufferReady_RenderThread);
-	Begin_Receive_AudioBufferData(World);
+	//End PIE deleate and tick delegate
+	AddPIEEndFunction();
+	AddTickFunction();
+
+	//create encode thread
+	CreateEncodeThread();
+
+	//bind delegate for get video data and audio data 
+	Begin_Receive_VideoData();
+	Begin_Receive_AudioData(World);
 }
+
+void UFFmpegDirector::Begin_Receive_VideoData()
+{
+	FSlateApplication::Get().GetRenderer()->OnBackBufferReadyToPresent().AddUObject(this, &UFFmpegDirector::OnBackBufferReady_RenderThread);
+}
+
 void UFFmpegDirector::OnBackBufferReady_RenderThread(SWindow& SlateWindow, const FTexture2DRHIRef& BackBuffer)
 {
 	if (gameWindow == &SlateWindow)
@@ -146,15 +164,130 @@ bool UFFmpegDirector::AddTickTime(float time)
 	return true;
 }
 
+void UFFmpegDirector::AddPIEEndFunction()
+{
+	EndPIEDelegateHandle = FEditorDelegates::PrePIEEnded.AddUObject(this, &UFFmpegDirector::EndPIE);
+}
+
+void UFFmpegDirector::AddTickFunction()
+{
+	TickDelegateHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UFFmpegDirector::AddTickTime));
+}
+
 void UFFmpegDirector::GetScreenVideoData()
 {
 	uint32 LolStride;
-	FRHICommandListImmediate& ll = GRHICommandList.GetImmediateCommandList();
+	FRHICommandListImmediate& list = GRHICommandList.GetImmediateCommandList();
 
-	uint8* TextureData = (uint8*)ll.LockTexture2D(GameTexture->GetTexture2D(), 0, EResourceLockMode::RLM_ReadOnly, LolStride, false);
+	uint8* TextureData = (uint8*)list.LockTexture2D(GameTexture->GetTexture2D(), 0, EResourceLockMode::RLM_ReadOnly, LolStride, false);
 	Runnable->InsertVideo(TextureData);
-	ll.UnlockTexture2D(GameTexture, 0, false);
-	
+	list.UnlockTexture2D(GameTexture, 0, false);
+}
+
+void UFFmpegDirector::CreateEncodeThread()
+{
+	Runnable = new FEncoderThread();
+	Runnable->CreateQueue(4 * width*height, 2048 * sizeof(float), 30, 40);
+	Runnable->GetAudioProcessDelegate().BindUObject(this, &UFFmpegDirector::Encode_Audio_Frame);
+	Runnable->video_encode_delegate.BindUObject(this, &UFFmpegDirector::Encode_Video_Frame);
+	Runnable->GetAudioTimeProcessDelegate().BindUObject(this, &UFFmpegDirector::Encode_SetCurrentAudioTime);
+	RunnableThread = FRunnableThread::Create(Runnable, TEXT("EncoderThread"));
+}
+
+void UFFmpegDirector::AudioFilterAlloc()
+{
+	audio_buffersrc = avfilter_get_by_name("abuffer");
+	audio_buffersink = avfilter_get_by_name("abuffersink");
+
+	audio_outputs = avfilter_inout_alloc();
+	audio_inputs = avfilter_inout_alloc();
+}
+
+void UFFmpegDirector::SetAudioFilterValue()
+{
+	if (audio_index == -1)
+		return;
+	int ret = 0;
+	audio_filter_graph = avfilter_graph_alloc();
+
+	if (!audio_inputs || !audio_outputs || !audio_filter_graph)
+	{
+		ret = AVERROR(ENOMEM);
+		return;
+	}
+	const enum AVSampleFormat out_sample_fmts[] = { audio_encoder_codec_context->sample_fmt,
+			AV_SAMPLE_FMT_NONE };
+	const int64_t out_channel_layouts[] = { audio_encoder_codec_context->channel_layout, -1 };
+	const int out_sample_rates[] = { audio_encoder_codec_context->sample_rate, -1 };
+
+	if (!audio_encoder_codec_context->channel_layout)
+		audio_encoder_codec_context->channel_layout = av_get_default_channel_layout(
+			audio_encoder_codec_context->channels);
+
+	char args[100];
+	snprintf(args, sizeof(args),
+		"time_base=%d/%d:sample_rate=%d:sample_fmt=%s:channel_layout=%lu",
+		audio_encoder_codec_context->time_base.num, audio_encoder_codec_context->time_base.den,
+		audio_encoder_codec_context->sample_rate, av_get_sample_fmt_name(audio_encoder_codec_context->sample_fmt),
+		(unsigned long)audio_encoder_codec_context->channel_layout);
+
+	ret = avfilter_graph_create_filter(&audio_buffersrc_ctx, audio_buffersrc, "in",
+		args, NULL, audio_filter_graph);
+	if (ret < 0)
+	{
+		check(false);
+	}
+
+	ret = avfilter_graph_create_filter(&audio_buffersink_ctx, audio_buffersink, "out",
+		NULL, NULL, audio_filter_graph);
+	if (ret < 0) 
+	{
+		check(false);
+	}
+
+	ret = av_opt_set_int_list(audio_buffersink_ctx, "sample_fmts", out_sample_fmts,
+		-1, AV_OPT_SEARCH_CHILDREN);
+	if (ret < 0)
+	{
+		check(false);
+	}
+
+	ret = av_opt_set_int_list(audio_buffersink_ctx, "channel_layouts",
+		out_channel_layouts, -1, AV_OPT_SEARCH_CHILDREN);
+	if (ret < 0)
+	{
+		check(false);
+	}
+
+	ret = av_opt_set_int_list(audio_buffersink_ctx, "sample_rates", out_sample_rates,
+		-1, AV_OPT_SEARCH_CHILDREN);
+	if (ret < 0) 
+	{
+		check(false);
+	}
+
+	audio_outputs->name = av_strdup("in");
+	audio_outputs->filter_ctx = audio_buffersrc_ctx;
+	audio_outputs->pad_idx = 0;
+	audio_outputs->next = NULL;
+
+	audio_inputs->name = av_strdup("out");
+	audio_inputs->filter_ctx = audio_buffersink_ctx;
+	audio_inputs->pad_idx = 0;
+	audio_inputs->next = NULL;
+
+	audio_filter_descr = FString::FString("volume=");
+	audio_filter_descr.Append(FString::SanitizeFloat(audio_volume));
+	if ((ret = avfilter_graph_parse_ptr(audio_filter_graph, TCHAR_TO_ANSI(*audio_filter_descr),
+		&audio_inputs, &audio_outputs, NULL)) < 0)
+	{
+		check(false);
+	}
+	if ((ret = avfilter_graph_config(audio_filter_graph, NULL)) < 0)
+	{
+		check(false);
+	}
+	av_buffersink_set_frame_size(audio_buffersink_ctx, 1024);
 }
 
 void UFFmpegDirector::Create_Audio_Encoder(const char* audioencoder_name)
@@ -162,7 +295,7 @@ void UFFmpegDirector::Create_Audio_Encoder(const char* audioencoder_name)
 	AVCodec* audioencoder_codec;
 	audioencoder_codec = avcodec_find_encoder_by_name(audioencoder_name);
 	out_audio_stream = avformat_new_stream(out_format_context, audioencoder_codec);
-
+	audio_index = out_audio_stream->index;
 	audio_encoder_codec_context = avcodec_alloc_context3(audioencoder_codec);
 
 	if (!out_audio_stream)
@@ -195,7 +328,7 @@ void UFFmpegDirector::Create_Audio_Encoder(const char* audioencoder_name)
 
 }
 
-void UFFmpegDirector::Create_Video_Encoder(bool is_use_NGPU, int fps, const char* out_file_name, int bit_rate)
+void UFFmpegDirector::Create_Video_Encoder(bool is_use_NGPU, const char* out_file_name, int bit_rate)
 {
 	AVCodec *encoder_codec;
 	int ret;
@@ -213,6 +346,9 @@ void UFFmpegDirector::Create_Video_Encoder(bool is_use_NGPU, int fps, const char
 		check(false);
 	}
 	out_video_stream = avformat_new_stream(out_format_context, encoder_codec);
+
+	video_index = out_video_stream->index;
+
 	video_encoder_codec_context = avcodec_alloc_context3(encoder_codec);
 	if (!video_encoder_codec_context)
 	{
@@ -228,7 +364,7 @@ void UFFmpegDirector::Create_Video_Encoder(bool is_use_NGPU, int fps, const char
 	video_encoder_codec_context->height = height;
 	video_encoder_codec_context->max_b_frames = 2;
 	video_encoder_codec_context->time_base.num = 1;
-	video_encoder_codec_context->time_base.den = fps;
+	video_encoder_codec_context->time_base.den = video_fps;
 	video_encoder_codec_context->pix_fmt = AV_PIX_FMT_YUV420P;
 	video_encoder_codec_context->me_range = 16;
 	video_encoder_codec_context->codec_type = AVMEDIA_TYPE_VIDEO;
@@ -241,7 +377,7 @@ void UFFmpegDirector::Create_Video_Encoder(bool is_use_NGPU, int fps, const char
 	video_encoder_codec_context->qmin = 31;
 	video_encoder_codec_context->qmax = 50;
 	video_encoder_codec_context->me_range = 16;
-	video_encoder_codec_context->framerate = { fps,1 };
+	video_encoder_codec_context->framerate = { video_fps,1 };
 
 	//ultrafast,superfast, veryfast, faster, fast, medium, slow, slower, veryslow,placebo.
 	if (encoder_codec)
@@ -294,7 +430,7 @@ void UFFmpegDirector::Create_Video_Encoder(bool is_use_NGPU, int fps, const char
 		check(false);
 	}
 
-	Video_Frame_Duration = out_video_stream->time_base.den / FPS;
+	Video_Frame_Duration = out_video_stream->time_base.den / video_fps;
 
 }
 
@@ -321,18 +457,6 @@ void UFFmpegDirector::Create_Audio_Swr()
 	swr_init(swr);
 }
 
-void UFFmpegDirector::Set_Audio_Volume(AVFrame *frame)
-{
-	int i = 0;
-	float *ch_left = (float *)frame->data[0];
-	float *ch_right = (float *)frame->data[1];
-	for (i = 0; i < frame->nb_samples; i++)
-	{
-		ch_left[i] *= audio_volume;
-		ch_right[i] *= audio_volume;
-	}
-}
-
 void UFFmpegDirector::OnNewSubmixBuffer(const USoundSubmix* OwningSubmix, float* AudioData, int32 NumSamples, int32 NumChannels, const int32 SampleRate, double AudioClock)
 {
 	Runnable->InsertAudio((uint8_t*)AudioData, (uint8_t*)&AudioClock);
@@ -345,7 +469,7 @@ void UFFmpegDirector::Encode_Video_Frame(uint8_t *rgb)
 	uint32 Col = 0;
 	uint8* TextureDataPtr=rgb;
 
-	uint8_t* Firset_ptr = buff_rgb;
+	uint8_t* Firset_ptr = buff_bgr;
 	for (Row = 0; Row < GameTexture->GetSizeY(); ++Row)
 	{
 		uint32* PixelPtr = (uint32*)TextureDataPtr;
@@ -354,20 +478,20 @@ void UFFmpegDirector::Encode_Video_Frame(uint8_t *rgb)
 			uint32 EncodedPixel = *PixelPtr;
 			//	AV_PIX_FMT_BGR24	这里暂时转换为BGR
 			//	AV_PIX_FMT_RGB24	掉帧严重 暂时不知道为什么
-			*(buff_rgb + 2) = (EncodedPixel >> 2) & 0xFF;
-			*(buff_rgb + 1) = (EncodedPixel >> 12) & 0xFF;
-			*(buff_rgb) = (EncodedPixel >> 22) & 0xFF;
-			buff_rgb += 3;
+			*(buff_bgr + 2) = (EncodedPixel >> 2) & 0xFF;
+			*(buff_bgr + 1) = (EncodedPixel >> 12) & 0xFF;
+			*(buff_bgr) = (EncodedPixel >> 22) & 0xFF;
+			buff_bgr += 3;
 			++PixelPtr;
 		}
 		TextureDataPtr += Add_Size;
 	}
-	buff_rgb = Firset_ptr;
+	buff_bgr = Firset_ptr;
 
 	int got_output = 0;
-	Video_Frame_YUV_From_BGR(buff_rgb);
+	Video_Frame_YUV_From_BGR(buff_bgr);
 	av_init_packet(&video_pkt);
-	video_frame->pts = pts;
+	video_frame->pts = video_pts;
 	
 	video_pkt.data = NULL;
 	video_pkt.size = 0;
@@ -377,9 +501,9 @@ void UFFmpegDirector::Encode_Video_Frame(uint8_t *rgb)
 	}
 	if (got_output)
 	{
-		++pts;
+		++video_pts;
 		video_pkt.pts = video_pkt.dts = video_frame->pts*Video_Frame_Duration;
-		video_pkt.stream_index = out_video_stream->index;
+		video_pkt.stream_index = video_index;
 		video_pkt.duration = Video_Frame_Duration;
 		av_write_frame(out_format_context, &video_pkt);
 		av_packet_unref(&video_pkt);
@@ -404,8 +528,6 @@ void UFFmpegDirector::Encode_Audio_Frame(uint8_t *rgb)
 	audio_frame->data[0] = (uint8_t*)outs[0];
 	audio_frame->data[1] = (uint8_t*)outs[1];
 
-	Set_Audio_Volume(audio_frame);
-
 	if (avcodec_encode_audio2(audio_encoder_codec_context, &audio_pkt, audio_frame, &got_output) < 0)
 	{
 		check(false);
@@ -422,7 +544,7 @@ void UFFmpegDirector::Encode_Audio_Frame(uint8_t *rgb)
 			{ 1,48000 },
 			out_audio_stream->time_base);
 	
-		audio_pkt.stream_index = out_audio_stream->index;
+		audio_pkt.stream_index = audio_index;
 		av_write_frame(out_format_context, &audio_pkt);
 		av_packet_unref(&audio_pkt);
 	}
