@@ -61,7 +61,7 @@ public:
 	
 public:
 	AVFrame* video_frame;
-	AVFrame* audio_frame;	
+	
 private:
 	void Create_Video_Encoder(bool is_use_NGPU, const char* out_file_name,int bit_rate);
 	void Create_Audio_Encoder(const char* audioencoder_name);
@@ -103,7 +103,7 @@ private:
 	AVCodecContext* video_encoder_codec_context;
 	AVCodecContext* audio_encoder_codec_context;
 	AVPacket video_pkt;
-	AVPacket audio_pkt;
+
 	SwsContext* sws_context;
 	AVStream* out_video_stream;
 	AVStream* out_audio_stream;
