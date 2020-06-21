@@ -42,7 +42,7 @@ public:
 	UFFmpegDirector();
 	virtual ~UFFmpegDirector();
 	UFUNCTION(BlueprintCallable)
-	void Initialize_Director(UWorld* World, FString OutFileName, bool UseGPU, int VideoFps, bool RTMP, int VideoBitRate, float AudioDelay,float SoundVolume);
+	void Initialize_Director(UWorld* World, FString OutFileName, bool UseGPU,FString VideoFilter,int VideoFps, int VideoBitRate, float AudioDelay,float SoundVolume);
 	void Begin_Receive_AudioData(UWorld* world);
 	void Begin_Receive_VideoData();
 
@@ -55,13 +55,10 @@ public:
 	void OnBackBufferReady_RenderThread(SWindow& SlateWindow, const FTexture2DRHIRef& BackBuffer);
 	bool AddTickTime(float time);
 
-	UFUNCTION(BlueprintCallable)
-	void EndPIE(const bool l);
-
+	void EndWindowReader(const bool i);
+	void EndWindowReader_StandardGame(void* i);
+	
 	void DestoryDirector();
-	
-public:
-	
 	
 private:
 	void Create_Video_Encoder(bool is_use_NGPU, const char* out_file_name,int bit_rate);
@@ -71,7 +68,7 @@ private:
 	void GetScreenVideoData();
 
 	void AddTickFunction();
-	void AddPIEEndFunction();
+	void AddEndFunction();
 	void CreateEncodeThread();
 	void Set_Audio_Volume(AVFrame *frame);
 
@@ -80,6 +77,7 @@ private:
 
 private:
 	bool IsDestory = false;
+	FString filter_descr;
 
 	int video_fps;
 	uint32 Video_Frame_Duration;
@@ -89,10 +87,12 @@ private:
 	float audio_volume;
 	uint32 width;
 	uint32 height;
+	uint32 out_width;
+	uint32 out_height;
+
 	FTexture2DRHIRef GameTexture;
 
-	const AVFilter *buffersrc;
-	const AVFilter *buffersink;
+
 	AVFilterInOut *outputs;
 	AVFilterInOut *inputs;
 	AVFilterGraph *filter_graph;
@@ -114,7 +114,6 @@ private:
 	AVFormatContext* out_format_context;
 	AVCodecContext* video_encoder_codec_context;
 	AVCodecContext* audio_encoder_codec_context;
-	AVPacket video_pkt;
 
 	SwsContext* sws_context;
 	AVStream* out_video_stream;
@@ -128,6 +127,6 @@ private:
 	AVFrame* audio_frame;
 	AVFrame* video_frame;
 
-
 	uint32 LolStride;
+	TEnumAsByte<EWorldType::Type> GameMode;
 };

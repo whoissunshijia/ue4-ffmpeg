@@ -4,11 +4,11 @@
 #include "FFmpegFunctionLibrary.h"
 #include "FFMPEGDirector.h"
 
-int UFFmpegFunctionLibrary::CreateFFmpegDirector(UWorld* World, FString OutFileName, bool UseGPU, int FPS, bool RTMP, int VideoBitRate, float AudioDelay,float SoundVolume)
+int UFFmpegFunctionLibrary::CreateFFmpegDirector(UWorld* World, FString OutFileName, FString VideoFilter, bool UseGPU, int FPS, int VideoBitRate, float AudioDelay, float SoundVolume)
 {
 	UFFmpegDirector* d = NewObject<UFFmpegDirector>();
 	d->AddToRoot();
-	d->Initialize_Director(World, OutFileName, UseGPU, FPS, RTMP, VideoBitRate, AudioDelay, SoundVolume);
+	d->Initialize_Director(World, OutFileName, UseGPU, VideoFilter, FPS, VideoBitRate, AudioDelay, SoundVolume);
 	return 1;
 }
 

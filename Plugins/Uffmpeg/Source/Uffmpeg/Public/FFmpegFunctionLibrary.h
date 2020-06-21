@@ -17,7 +17,7 @@ class UFFMPEG_API UFFmpegFunctionLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 	UFUNCTION(BlueprintCallable)
-	static int CreateFFmpegDirector(UWorld* World, FString OutFileName, bool UseGPU,int FPS,bool RTMP,int VideoBitRate,float AudioDelay, float SoundVolume);
+	static int CreateFFmpegDirector(UWorld* World, FString OutFileName,FString VideoFilter,bool UseGPU,int FPS,int VideoBitRate,float AudioDelay, float SoundVolume);
 
 	UFUNCTION(BlueprintCallable)
 	static UWorld* GetWorldContext(UObject* WorldContextObject);
