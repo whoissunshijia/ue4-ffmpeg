@@ -32,6 +32,7 @@ extern "C"
  */
 class FEncoderThread;
 
+
 UCLASS(BlueprintType)
 class UFFMPEG_API UFFmpegDirector:public UObject,public ISubmixBufferListener
 {
@@ -60,7 +61,7 @@ public:
 	void DestoryDirector();
 	
 public:
-	AVFrame* video_frame;
+	
 	
 private:
 	void Create_Video_Encoder(bool is_use_NGPU, const char* out_file_name,int bit_rate);
@@ -72,9 +73,11 @@ private:
 	void AddTickFunction();
 	void AddPIEEndFunction();
 	void CreateEncodeThread();
+	void Set_Audio_Volume(AVFrame *frame);
 
-	void AudioFilterAlloc();
-	void SetAudioFilterValue();
+	void Alloc_Video_Filter();
+	uint32 FormatSize_X(uint32 x);
+
 private:
 	bool IsDestory = false;
 
@@ -84,9 +87,18 @@ private:
 	double CurrentAuidoTime = 0.0;
 	float audio_delay;
 	float audio_volume;
-	int width;
-	int height;
+	uint32 width;
+	uint32 height;
 	FTexture2DRHIRef GameTexture;
+
+	const AVFilter *buffersrc;
+	const AVFilter *buffersink;
+	AVFilterInOut *outputs;
+	AVFilterInOut *inputs;
+	AVFilterGraph *filter_graph;
+	AVFilterContext *buffersink_ctx;
+	AVFilterContext *buffersrc_ctx;
+
 	FAudioDevice* AudioDevice;
 	SWindow* gameWindow;
 	TArray<FColor> TexturePixel;
@@ -109,17 +121,13 @@ private:
 	AVStream* out_audio_stream;
 	SwrContext* swr;
 	uint8_t* outs[2];
-	const AVFilter* audio_buffersrc;
-	const AVFilter* audio_buffersink;
-	AVFilterInOut* audio_outputs;
-	AVFilterInOut* audio_inputs;
-	AVFilterGraph* audio_filter_graph;
-	AVFilterContext* audio_buffersink_ctx;
-	AVFilterContext* audio_buffersrc_ctx;
-	FString audio_filter_descr;
 
 	FDelegateHandle TickDelegateHandle;
 	FDelegateHandle EndPIEDelegateHandle;
 
- 
+	AVFrame* audio_frame;
+	AVFrame* video_frame;
+
+
+	uint32 LolStride;
 };

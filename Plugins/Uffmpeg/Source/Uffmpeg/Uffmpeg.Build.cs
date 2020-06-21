@@ -84,7 +84,8 @@ public class UFFmpeg : ModuleRules
                 "Projects",
                 "Engine",
                 "RHI",
-                "UnrealEd"
+                "UnrealEd",
+                "RenderCore"
 				// ... add private dependencies that you statically link with here ...	
 			}
             );

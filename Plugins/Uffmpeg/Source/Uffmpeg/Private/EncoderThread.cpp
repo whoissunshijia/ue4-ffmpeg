@@ -89,9 +89,9 @@ bool FEncoderThread::InsertVideo(uint8* Src)
 		FScopeLock ScopeLock(&VideoBufferMutex);		
 		while (!videobuffer_queue->InsertEncodeData(Src))
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Red, FString("video  now  encode"));
-			//videobuffer_queue->PrcessEncodeData();
-			//EncodeVideo();
+			//GEngine->AddOnScreenDebugMessage(-1, 0.02f, FColor::Red, FString("video  now  encode"));
+			videobuffer_queue->PrcessEncodeData();
+			EncodeVideo();
 		}
 	}		
 	return true;
@@ -106,8 +106,8 @@ bool FEncoderThread::InsertAudio(uint8* Src, uint8* time)
 
 		while (!audio_queue->InsertEncodeData(Src) || !audio_time_queue->InsertEncodeData(time))
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Red, FString("audio  now  encode"));
-			//EncodeAudio();
+			//GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Red, FString("audio  now  encode"));
+			EncodeAudio();
 		}
 	}
 	return true;
@@ -121,6 +121,7 @@ void FEncoderThread::GetBufferData(uint8* data)
 void FEncoderThread::RunEncode()
 {
 	bool IsNeedEncode = false;
+
 	{
 		FScopeLock ScopeLock(&AudioMutex);
 		EncodeAudio();
