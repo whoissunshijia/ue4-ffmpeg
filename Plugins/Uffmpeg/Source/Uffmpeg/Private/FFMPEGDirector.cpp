@@ -54,6 +54,10 @@ void UFFmpegDirector::DestoryDirector()
 {
 	if (!IsDestory)
 	{
+		RunnableThread->Kill(true);
+		delete Runnable;
+		Runnable = nullptr;
+
 		if (AudioDevice)
 		{
 			AudioDevice->UnregisterSubmixBufferListener(this);
@@ -63,10 +67,6 @@ void UFFmpegDirector::DestoryDirector()
 		FEditorDelegates::PrePIEEnded.Remove(EndPIEDelegateHandle);
 
 		FTicker::GetCoreTicker().RemoveTicker(TickDelegateHandle);
-
-		RunnableThread->Kill(true);
-
-		delete Runnable;
 
 		Encode_Finish();
 		FMemory::Free(outs[0]);
@@ -218,7 +218,8 @@ void UFFmpegDirector::GetScreenVideoData()
 {
 	FRHICommandListImmediate& list = GRHICommandList.GetImmediateCommandList();
 	uint8* TextureData = (uint8*)list.LockTexture2D(GameTexture->GetTexture2D(), 0, EResourceLockMode::RLM_ReadOnly, LolStride, false);
-	Runnable->InsertVideo(TextureData);
+	if(Runnable)
+		Runnable->InsertVideo(TextureData);
 	list.UnlockTexture2D(GameTexture, 0, false);
 }
 
@@ -396,7 +397,8 @@ void UFFmpegDirector::Create_Audio_Swr()
 
 void UFFmpegDirector::OnNewSubmixBuffer(const USoundSubmix* OwningSubmix, float* AudioData, int32 NumSamples, int32 NumChannels, const int32 SampleRate, double AudioClock)
 {
-	Runnable->InsertAudio((uint8_t*)AudioData, (uint8_t*)&AudioClock);
+	if(Runnable)
+		Runnable->InsertAudio((uint8_t*)AudioData, (uint8_t*)&AudioClock);
 }
 
 void UFFmpegDirector::Encode_Audio_Frame(uint8_t *rgb)
