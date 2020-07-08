@@ -297,11 +297,11 @@ void UFFmpegDirector::Create_Video_Encoder(bool is_use_NGPU, const char* out_fil
 		check(false);
 	}
 	video_encoder_codec_context->bit_rate = bit_rate;
-	video_encoder_codec_context->rc_min_rate = bit_rate;
-	video_encoder_codec_context->rc_max_rate = bit_rate;
-	video_encoder_codec_context->bit_rate_tolerance = bit_rate;
-	video_encoder_codec_context->rc_buffer_size = bit_rate;
-	video_encoder_codec_context->rc_initial_buffer_occupancy = bit_rate * 3 / 4;
+	//video_encoder_codec_context->rc_min_rate = bit_rate;
+	//video_encoder_codec_context->rc_max_rate = bit_rate;
+	//video_encoder_codec_context->bit_rate_tolerance = bit_rate;
+	//video_encoder_codec_context->rc_buffer_size = bit_rate;
+	//video_encoder_codec_context->rc_initial_buffer_occupancy = bit_rate * 3 / 4;
 	video_encoder_codec_context->width = out_width;
 	video_encoder_codec_context->height = out_height;
 	video_encoder_codec_context->max_b_frames = 2;
@@ -312,18 +312,18 @@ void UFFmpegDirector::Create_Video_Encoder(bool is_use_NGPU, const char* out_fil
 	video_encoder_codec_context->codec_type = AVMEDIA_TYPE_VIDEO;
 	video_encoder_codec_context->profile = FF_PROFILE_H264_BASELINE;
 	video_encoder_codec_context->frame_number = 1;
-	video_encoder_codec_context->qcompress = 0.6;
+	video_encoder_codec_context->qcompress = 0.8;
 	video_encoder_codec_context->max_qdiff = 4;
 	video_encoder_codec_context->level = 30;
 	video_encoder_codec_context->gop_size = 25;
-	video_encoder_codec_context->qmin = 31;
-	video_encoder_codec_context->qmax = 50;
+	video_encoder_codec_context->qmin = 18;
+	video_encoder_codec_context->qmax = 28;
 	video_encoder_codec_context->me_range = 16;
 	video_encoder_codec_context->framerate = { video_fps,1 };
 
 	//ultrafast,superfast, veryfast, faster, fast, medium, slow, slower, veryslow,placebo.
 	if (encoder_codec)
-		av_opt_set(video_encoder_codec_context->priv_data, "preset", "faster",
+		av_opt_set(video_encoder_codec_context->priv_data, "preset", "fast",
 			0);
 
 	if (out_format_context->oformat->flags & AVFMT_GLOBALHEADER)
