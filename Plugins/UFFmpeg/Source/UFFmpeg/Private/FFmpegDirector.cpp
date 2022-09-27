@@ -1,23 +1,22 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
-
-#include "FFmpegDirector.h"
 #include "Engine/GameViewportClient.h"
-#include "SceneViewport.h"
-#include "SlateApplication.h"
-#include "EncoderThread.h"
-#include "EncodeData.h"
-#include "LogVerbosity.h"
-#include "Ticker.h"
+#include "Slate/SceneViewport.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Logging/LogVerbosity.h"
+#include "Containers/Ticker.h"
 #include "Editor.h"
-
 #include "Engine/World.h"
-#include "FileManager.h"
-#include "FileHelper.h"
+#include "HAL/FileManager.h"
+#include "Misc/FileHelper.h"
 #include "RenderingThread.h"
 #include "RHI.h"
-#include "CoreDelegates.h"
+#include "Misc/CoreDelegates.h"
 #include "GameDelegates.h"
+
+#include "FFmpegDirector.h"
+#include "EncoderThread.h"
+#include "EncodeData.h"
 
 UFFmpegDirector::UFFmpegDirector() :
 	outputs(nullptr),
@@ -66,7 +65,7 @@ void UFFmpegDirector::DestoryDirector()
 
 		FEditorDelegates::PrePIEEnded.Remove(EndPIEDelegateHandle);
 
-		FTicker::GetCoreTicker().RemoveTicker(TickDelegateHandle);
+		FTSTicker::GetCoreTicker().RemoveTicker(TickDelegateHandle);
 
 		Encode_Finish();
 		FMemory::Free(outs[0]);
@@ -214,7 +213,7 @@ void UFFmpegDirector::AddEndFunction()
 
 void UFFmpegDirector::AddTickFunction()
 {
-	TickDelegateHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UFFmpegDirector::AddTickTime));
+	TickDelegateHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UFFmpegDirector::AddTickTime));
 }
 
 void UFFmpegDirector::GetScreenVideoData()
@@ -452,8 +451,8 @@ void UFFmpegDirector::Encode_Video_Frame(uint8_t *rgb)
 		for (Col = 0; Col < width; ++Col)
 		{
 			uint32 EncodedPixel = *PixelPtr;
-			//	AV_PIX_FMT_BGR24	ÕâÀïÔÝÊ±×ª»»ÎªBGR
-			//	AV_PIX_FMT_RGB24	µôÖ¡ÑÏÖØ ÔÝÊ±²»ÖªµÀÎªÊ²Ã´
+			//	AV_PIX_FMT_BGR24	è¿™é‡Œæš‚æ—¶è½¬æ¢ä¸ºBGR
+			//	AV_PIX_FMT_RGB24	æŽ‰å¸§ä¸¥é‡ æš‚æ—¶ä¸çŸ¥é“ä¸ºä»€ä¹ˆ
 			*(buff_bgr + 2) = (EncodedPixel >> 2) & 0xFF;
 			*(buff_bgr + 1) = (EncodedPixel >> 12) & 0xFF;
 			*(buff_bgr) = (EncodedPixel >> 22) & 0xFF;

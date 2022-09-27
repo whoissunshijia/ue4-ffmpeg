@@ -21,10 +21,9 @@ public class UFFmpeg : ModuleRules
     {
         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-        if ((Target.Platform == UnrealTargetPlatform.Win64) || (Target.Platform == UnrealTargetPlatform.Win32))
+        if (Target.Platform == UnrealTargetPlatform.Win64)
         {
-
-            string PlatformString = (Target.Platform == UnrealTargetPlatform.Win64) ? "x64" : "Win32";
+            string PlatformString = "x64";
             string LibrariesPath = Path.Combine(Path.Combine(Path.Combine(ThirdPartyPath, "ffmpeg", "lib"), "vs"), PlatformString);    
 
             PublicAdditionalLibraries.Add(Path.Combine(LibrariesPath, "avcodec.lib"));
@@ -44,7 +43,6 @@ public class UFFmpeg : ModuleRules
                 PublicDelayLoadDLLs.Add(dll);
                 RuntimeDependencies.Add(Path.Combine(BinariesPath, dll), StagedFileType.NonUFS);
             }
-
         }
         else if (Target.Platform == UnrealTargetPlatform.Mac)
         {
