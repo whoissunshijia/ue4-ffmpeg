@@ -95,10 +95,13 @@ void UFFmpegDirector::EndWindowReader_StandardGame(void* i)
 void UFFmpegDirector::Begin_Receive_AudioData(UWorld* world)
 {
 	GameMode = world->WorldType;
-	AudioDevice = world->GetAudioDevice();
-	if (AudioDevice)
+	
+	FAudioDeviceHandle AudioDeviceHandle = world->GetAudioDevice();
+
+	//AudioDevice = AudioDeviceHandle;
+	if (AudioDeviceHandle)
 	{
-		AudioDevice->RegisterSubmixBufferListener(this);
+		AudioDeviceHandle->RegisterSubmixBufferListener(this);
 	}
 }
 
