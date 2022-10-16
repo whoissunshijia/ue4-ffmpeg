@@ -1,14 +1,6 @@
-# UE4结合FFmpeg实现录制和推流画面(一)
+# Live Streaming / Video Capture (with ffmpeg) for UnrealEngine 5
 
-新改版了一套流程,近日更新
-
-
-
-
-
-
-
-
+> [UE5 中RHI使用DX12会Crash](https://github.com/whoissunshijia/ue4-ffmpeg/issues/11)，因此要运行必须设置 `Platforms - Windows -> Targeted RHIs -> Default RHI` 为 `DirectX 11`
 
 之前,有碰到过需要在游戏中录制画面,或者推流游戏画面的需求,所以这里使用了`FFmpeg`来帮助做到了这一点.下面简单的把这个流程记录一下,这里先只讨论录制的功能,关于`FFmpeg`内部的细节就先不说了.
 

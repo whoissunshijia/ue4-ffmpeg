@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -6,6 +6,7 @@
 #include "AudioMixerDevice.h"
 #include "RHIResources.h"
 #include "RHICommandList.h"
+#include "Containers/Ticker.h"
 extern "C"
 {
 #include "libavformat/avformat.h"
@@ -121,7 +122,7 @@ private:
 	SwrContext* swr;
 	uint8_t* outs[2];
 
-	FDelegateHandle TickDelegateHandle;
+	FTSTicker::FDelegateHandle TickDelegateHandle;
 	FDelegateHandle EndPIEDelegateHandle;
 
 	AVFrame* audio_frame;

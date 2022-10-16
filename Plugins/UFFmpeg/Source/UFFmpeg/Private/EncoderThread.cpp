@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "EncoderThread.h"
@@ -129,10 +129,13 @@ void FEncoderThread::RunEncode()
 
 	{
 		FScopeLock ScopeLock1(&VideoBufferMutex);
-		IsNeedEncode = videobuffer_queue->PrcessEncodeData()
+		IsNeedEncode = videobuffer_queue->PrcessEncodeData();
 
 		if (IsNeedEncode)
+		{
 			EncodeVideo();
+		}
+			
 	}
 }
 
