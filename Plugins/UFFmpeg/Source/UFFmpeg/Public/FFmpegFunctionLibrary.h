@@ -10,16 +10,18 @@
  * 
  */
 
+DECLARE_LOG_CATEGORY_EXTERN(LogFFmpeg, Log, All);
+
 class UFFmpegDirector;
 
 UCLASS()
 class UFFMPEG_API UFFmpegFunctionLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
-	UFUNCTION(BlueprintCallable)
-	static int CreateFFmpegDirector(UWorld* World, FString OutFileName,FString VideoFilter,bool UseGPU,int FPS,int VideoBitRate,float AudioDelay, float SoundVolume);
+	UFUNCTION(BlueprintCallable, Category = "FFMpegEncoder")
+	static UFFmpegDirector* CreateFFmpegDirector(UWorld* World,int32 VideoLength, FString OutFileName, FString VideoFilter,bool UseGPU,int FPS,int VideoBitRate,float AudioDelay, float SoundVolume);
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category = "FFMpegEncoder")
 	static UWorld* GetWorldContext(UObject* WorldContextObject);
 
 

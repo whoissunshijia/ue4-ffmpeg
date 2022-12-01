@@ -21,7 +21,7 @@ public class UFFmpeg : ModuleRules
     {
         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-        if ((Target.Platform == UnrealTargetPlatform.Win64) || (Target.Platform == UnrealTargetPlatform.Win32))
+        if (Target.Platform == UnrealTargetPlatform.Win64)
         {
 
             string PlatformString = (Target.Platform == UnrealTargetPlatform.Win64) ? "x64" : "Win32";
@@ -84,8 +84,9 @@ public class UFFmpeg : ModuleRules
                 "Projects",
                 "Engine",
                 "RHI",
-                "UnrealEd",
-                "RenderCore"
+                /*"UnrealEd",*/
+                "RenderCore",
+                "D3D12RHI"
 				// ... add private dependencies that you statically link with here ...	
 			}
             );

@@ -32,6 +32,8 @@ extern "C"
  */
 class FEncoderThread;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRecordFinishDelegate, FString, FileAddress);
+
 
 UCLASS(BlueprintType)
 class UFFMPEG_API UFFmpegDirector:public UObject,public ISubmixBufferListener
@@ -42,7 +44,7 @@ public:
 	UFFmpegDirector();
 	virtual ~UFFmpegDirector();
 	UFUNCTION(BlueprintCallable)
-	void Initialize_Director(UWorld* World, FString OutFileName, bool UseGPU,FString VideoFilter,int VideoFps, int VideoBitRate, float AudioDelay,float SoundVolume);
+	void Initialize_Director(UWorld* World, int32 VideoLength, FString OutFileName, bool UseGPU,FString VideoFilter,int VideoFps, int VideoBitRate, float AudioDelay,float SoundVolume);
 	void Begin_Receive_AudioData(UWorld* world);
 	void Begin_Receive_VideoData();
 
@@ -54,12 +56,16 @@ public:
 	virtual void OnNewSubmixBuffer(const USoundSubmix* OwningSubmix, float* AudioData, int32 NumSamples, int32 NumChannels, const int32 SampleRate, double AudioClock) override;
 	void OnBackBufferReady_RenderThread(SWindow& SlateWindow, const FTexture2DRHIRef& BackBuffer);
 	bool AddTickTime(float time);
+	bool CheckThreadJobDone(float time);
 
 	void EndWindowReader(const bool i);
 	void EndWindowReader_StandardGame(void* i);
 	
 	void DestoryDirector();
-	
+
+	UPROPERTY(BlueprintAssignable, Category = "FFmpeg")
+		FOnRecordFinishDelegate OnRecordFinish;
+
 private:
 	void Create_Video_Encoder(bool is_use_NGPU, const char* out_file_name,int bit_rate);
 	void Create_Audio_Encoder(const char* audioencoder_name);
@@ -72,12 +78,23 @@ private:
 	void CreateEncodeThread();
 	void Set_Audio_Volume(AVFrame *frame);
 
+	//Stop capture Frame and wait for the encode finish
+	void StopCapture();
+
+	//AllDone, Send the Video and Quit game.
+	void Stop(UWorld* _world);
+
 	void Alloc_Video_Filter();
 	uint32 FormatSize_X(uint32 x);
 
+	uint32 TotalFrame;
+	uint32 FrameCount = 0;
+
 private:
 	bool IsDestory = false;
+	bool IsClosing = false;
 	FString filter_descr;
+	FString FileAddr;
 
 	int video_fps;
 	uint32 Video_Frame_Duration;
@@ -89,6 +106,7 @@ private:
 	uint32 height;
 	uint32 out_width;
 	uint32 out_height;
+
 
 	FTexture2DRHIRef GameTexture;
 
@@ -121,8 +139,12 @@ private:
 	SwrContext* swr;
 	uint8_t* outs[2];
 
-	FDelegateHandle TickDelegateHandle;
+	FTSTicker::FDelegateHandle TickDelegateHandle;
+	FTSTicker::FDelegateHandle CheckDelegateHandle;
 	FDelegateHandle EndPIEDelegateHandle;
+	FDelegateHandle BackBufferReadyHandle;
+
+	UWorld* FD_world;
 
 	AVFrame* audio_frame;
 	AVFrame* video_frame;

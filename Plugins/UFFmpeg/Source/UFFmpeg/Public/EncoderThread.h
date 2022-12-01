@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Runnable.h"
+#include "HAL/Runnable.h"
 #include "EncodeData.h"
 
 /**
@@ -39,6 +39,7 @@ public:
 	VideoEncodeDelegate video_encode_delegate;
 	void GetBufferData(uint8* data);
 
+	bool IsQueneEmpty();
 private:
 	void RunEncode();
 	void EncodeVideo();

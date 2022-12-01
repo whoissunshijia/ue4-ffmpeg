@@ -3,21 +3,26 @@
 
 #include "FFmpegDirector.h"
 #include "Engine/GameViewportClient.h"
-#include "SceneViewport.h"
-#include "SlateApplication.h"
+#include "Slate/SceneViewport.h"
+#include "Framework/Application/SlateApplication.h"
 #include "EncoderThread.h"
 #include "EncodeData.h"
-#include "LogVerbosity.h"
-#include "Ticker.h"
-#include "Editor.h"
+#include "Logging/LogVerbosity.h"
+#include "Containers/Ticker.h"
+//#include "Editor.h"
+#include "Runtime/Engine/Classes/Kismet/KismetSystemLibrary.h"
 
 #include "Engine/World.h"
-#include "FileManager.h"
-#include "FileHelper.h"
+#include "HAL/FileManager.h"
+#include "Misc/FileHelper.h"
 #include "RenderingThread.h"
 #include "RHI.h"
-#include "CoreDelegates.h"
+#include "Misc/CoreDelegates.h"
 #include "GameDelegates.h"
+#include "D3D12RHI.h"
+#include <Kismet/GameplayStatics.h>
+
+
 
 UFFmpegDirector::UFFmpegDirector() :
 	outputs(nullptr),
@@ -62,11 +67,12 @@ void UFFmpegDirector::DestoryDirector()
 		{
 			AudioDevice->UnregisterSubmixBufferListener(this);
 		}
-		FSlateApplication::Get().GetRenderer()->OnBackBufferReadyToPresent().RemoveAll(this);
+		if(FSlateApplication::IsInitialized())
+			FSlateApplication::Get().GetRenderer()->OnBackBufferReadyToPresent().RemoveAll(this);//(BackBufferReadyHandle);
 
-		FEditorDelegates::PrePIEEnded.Remove(EndPIEDelegateHandle);
+		//FEditorDelegates::PrePIEEnded.Remove(EndPIEDelegateHandle);
 
-		FTicker::GetCoreTicker().RemoveTicker(TickDelegateHandle);
+		FTSTicker::GetCoreTicker().RemoveTicker(TickDelegateHandle);
 
 		Encode_Finish();
 		FMemory::Free(outs[0]);
@@ -95,22 +101,32 @@ void UFFmpegDirector::EndWindowReader_StandardGame(void* i)
 void UFFmpegDirector::Begin_Receive_AudioData(UWorld* world)
 {
 	GameMode = world->WorldType;
-	AudioDevice = world->GetAudioDevice();
+	AudioDevice = world->GetAudioDevice().GetAudioDevice();
 	if (AudioDevice)
 	{
 		AudioDevice->RegisterSubmixBufferListener(this);
 	}
 }
 
-void UFFmpegDirector::Initialize_Director(UWorld* World, FString OutFileName, bool UseGPU, FString VideoFilter, int VideoFps, int VideoBitRate, float AudioDelay, float SoundVolume)
+void UFFmpegDirector::Initialize_Director(UWorld* World, int32 VideoLength, FString OutFileName, bool UseGPU, FString VideoFilter, int VideoFps, int VideoBitRate, float AudioDelay, float SoundVolume)
 {
-	avfilter_register_all();
-	av_register_all();
+	// Notice: These function will cause warning in build, but it still work.
+	
+	//avfilter_register_all();
+	//av_register_all();
+	
+	/* Still work */
 	avformat_network_init();
+	
+	// Notice end
 
+	FileAddr = OutFileName;
 	audio_delay = AudioDelay;
 	video_fps = VideoFps;
 	Video_Tick_Time = float(1) / float(video_fps);
+	TotalFrame = (VideoLength + 1) * VideoFps;
+	FrameCount = 0;
+	FD_world = World;
 	audio_volume = SoundVolume;
 
 	gameWindow = GEngine->GameViewport->GetWindow().Get();
@@ -172,27 +188,80 @@ void UFFmpegDirector::Initialize_Director(UWorld* World, FString OutFileName, bo
 	Begin_Receive_AudioData(World);
 
 	//End PIE deleate and tick delegate
-	AddEndFunction();
+	//AddEndFunction();
 	AddTickFunction();
 }
 
 void UFFmpegDirector::Begin_Receive_VideoData()
 {
-	FSlateApplication::Get().GetRenderer()->OnBackBufferReadyToPresent().AddUObject(this, &UFFmpegDirector::OnBackBufferReady_RenderThread);
+	BackBufferReadyHandle = FSlateApplication::Get().GetRenderer()->OnBackBufferReadyToPresent().AddUObject(this, &UFFmpegDirector::OnBackBufferReady_RenderThread);
 }
 
 void UFFmpegDirector::OnBackBufferReady_RenderThread(SWindow& SlateWindow, const FTexture2DRHIRef& BackBuffer)
 {
+	if (IsClosing)
+	{
+		return;
+	}
 	if (gameWindow == &SlateWindow)
 	{
 		if (ticktime >= Video_Tick_Time)
 		{
-			GameTexture = BackBuffer;
-			ticktime -= Video_Tick_Time;
-			GetScreenVideoData();		
+			if (FrameCount > TotalFrame)
+			{
+				IsClosing = true;
+				StopCapture();
+			}
+			else
+			{
+				GameTexture = BackBuffer;
+				ticktime -= Video_Tick_Time;
+				FrameCount++;
+				GetScreenVideoData();
+			}
 		}
 	}
 }
+
+void UFFmpegDirector::StopCapture()
+{
+	//Remove the frame catch ticker, cause we don't need it now.
+	FTSTicker::GetCoreTicker().RemoveTicker(TickDelegateHandle);
+
+
+	//Bind a new ticker to check if the other thread finish the job;
+	CheckDelegateHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UFFmpegDirector::CheckThreadJobDone));
+}
+
+void UFFmpegDirector::Stop(UWorld* _world)
+{
+	FTSTicker::GetCoreTicker().RemoveTicker(CheckDelegateHandle);
+
+	RunnableThread->Kill(true);
+	delete Runnable;
+	Runnable = nullptr;
+
+	if (AudioDevice)
+	{
+		AudioDevice->UnregisterSubmixBufferListener(this);
+	}
+	if (FSlateApplication::IsInitialized())
+		FSlateApplication::Get().GetRenderer()->OnBackBufferReadyToPresent().Remove(BackBufferReadyHandle);
+
+	Encode_Finish();
+	FMemory::Free(outs[0]);
+	FMemory::Free(outs[1]);
+	FMemory::Free(buff_bgr);
+
+	/* Only in Test, Quit game after Finish.
+	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(this, 0);
+	UKismetSystemLibrary::QuitGame(_world, PlayerController, EQuitPreference::Quit, true);
+	*/
+
+	// Tell us the file convent finish.
+	OnRecordFinish.Broadcast(FileAddr);
+}
+
 
 bool UFFmpegDirector::AddTickTime(float time)
 {
@@ -200,27 +269,45 @@ bool UFFmpegDirector::AddTickTime(float time)
 	return true;
 }
 
+
+bool UFFmpegDirector::CheckThreadJobDone(float time)
+{
+	if (Runnable->IsQueneEmpty())
+	{
+		Stop(FD_world);
+	}
+	return true;
+}
+
 void UFFmpegDirector::AddEndFunction()
 {
-	if(GameMode== EWorldType::Game)
+	// Default End Function Logic, Stop when game thread end.
+	//if(GameMode== EWorldType::Game)
 		FSlateApplication::Get().GetRenderer()->OnSlateWindowDestroyed().AddUObject(this, &UFFmpegDirector::EndWindowReader_StandardGame);
-		
-	if(GameMode == EWorldType::PIE)
-		FEditorDelegates::EndPIE.AddUObject(this, &UFFmpegDirector::EndWindowReader);
+// 		
+// 	if(GameMode == EWorldType::PIE)
+// 		FEditorDelegates::EndPIE.AddUObject(this, &UFFmpegDirector::EndWindowReader);
+
+	// Modify: Stop Recorder when get enough frame.
 }
 
 void UFFmpegDirector::AddTickFunction()
 {
-	TickDelegateHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UFFmpegDirector::AddTickTime));
+	TickDelegateHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateUObject(this, &UFFmpegDirector::AddTickTime));
 }
 
 void UFFmpegDirector::GetScreenVideoData()
 {
 	FRHICommandListImmediate& list = GRHICommandList.GetImmediateCommandList();
+	
+	// Panic: FRHICommandListImmediate::LockTexture2D() will cause crash in DirectX 12, use DirectX 11.
 	uint8* TextureData = (uint8*)list.LockTexture2D(GameTexture->GetTexture2D(), 0, EResourceLockMode::RLM_ReadOnly, LolStride, false);
+	
 	if(Runnable)
 		Runnable->InsertVideo(TextureData);
 	list.UnlockTexture2D(GameTexture, 0, false);
+
+	
 }
 
 void UFFmpegDirector::CreateEncodeThread()
@@ -297,11 +384,11 @@ void UFFmpegDirector::Create_Video_Encoder(bool is_use_NGPU, const char* out_fil
 		check(false);
 	}
 	video_encoder_codec_context->bit_rate = bit_rate;
-	//video_encoder_codec_context->rc_min_rate = bit_rate;
-	//video_encoder_codec_context->rc_max_rate = bit_rate;
-	//video_encoder_codec_context->bit_rate_tolerance = bit_rate;
-	//video_encoder_codec_context->rc_buffer_size = bit_rate;
-	//video_encoder_codec_context->rc_initial_buffer_occupancy = bit_rate * 3 / 4;
+	/*video_encoder_codec_context->rc_min_rate = bit_rate;
+	video_encoder_codec_context->rc_max_rate = bit_rate;
+	video_encoder_codec_context->bit_rate_tolerance = bit_rate;
+	video_encoder_codec_context->rc_buffer_size = bit_rate;
+	video_encoder_codec_context->rc_initial_buffer_occupancy = bit_rate * 3 / 4;*/
 	video_encoder_codec_context->width = out_width;
 	video_encoder_codec_context->height = out_height;
 	video_encoder_codec_context->max_b_frames = 2;
@@ -413,10 +500,10 @@ void UFFmpegDirector::Encode_Audio_Frame(uint8_t *rgb)
 	audio_frame->data[1] = (uint8_t*)outs[1];
 	Set_Audio_Volume(audio_frame);
 
-	if (avcodec_encode_audio2(audio_encoder_codec_context, audio_pkt, audio_frame, &got_output) < 0)
+	/*if (avcodec_encode_audio2(audio_encoder_codec_context, audio_pkt, audio_frame, &got_output) < 0)
 	{
 		check(false);
-	}
+	}*/
 	if (got_output)
 	{
 		audio_pkt->pts = audio_pkt->dts = av_rescale_q(
@@ -523,6 +610,7 @@ void UFFmpegDirector::Set_Audio_Volume(AVFrame *frame)
 		ch_right[i] *= audio_volume;
 	}
 }
+
 
 void UFFmpegDirector::Alloc_Video_Filter()
 {

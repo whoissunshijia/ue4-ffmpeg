@@ -118,6 +118,12 @@ void FEncoderThread::GetBufferData(uint8* data)
 	video_data = data;	
 }
 
+
+bool FEncoderThread::IsQueneEmpty()
+{
+	return videobuffer_queue->IsEmpty() && audio_queue->IsEmpty() && audio_time_queue->IsEmpty();
+}
+
 void FEncoderThread::RunEncode()
 {
 	bool IsNeedEncode = false;
@@ -129,7 +135,7 @@ void FEncoderThread::RunEncode()
 
 	{
 		FScopeLock ScopeLock1(&VideoBufferMutex);
-		IsNeedEncode = videobuffer_queue->PrcessEncodeData()
+		IsNeedEncode = videobuffer_queue->PrcessEncodeData();
 
 		if (IsNeedEncode)
 			EncodeVideo();
