@@ -1,0 +1,15 @@
+#Unreal Engine Cash folder
+Binaries
+Build
+Config
+DerivedDataCache
+Intermediate
+package
+Saved
+
+#Visual Studio Cash folder
+.vs
+*.exe
+
+#Custom ignore properties
+*.mp4
