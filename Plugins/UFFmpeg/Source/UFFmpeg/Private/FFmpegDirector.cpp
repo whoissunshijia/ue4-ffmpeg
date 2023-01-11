@@ -110,15 +110,7 @@ void UFFmpegDirector::Begin_Receive_AudioData(UWorld* world)
 
 void UFFmpegDirector::Initialize_Director(UWorld* World, int32 VideoLength, FString OutFileName, bool UseGPU, FString VideoFilter, int VideoFps, int VideoBitRate, float AudioDelay, float SoundVolume)
 {
-	// Notice: These function will cause warning in build, but it still work.
-	
-	//avfilter_register_all();
-	//av_register_all();
-	
-	/* Still work */
 	avformat_network_init();
-	
-	// Notice end
 
 	FileAddr = OutFileName;
 	audio_delay = AudioDelay;
@@ -253,11 +245,6 @@ void UFFmpegDirector::Stop(UWorld* _world)
 	FMemory::Free(outs[1]);
 	FMemory::Free(buff_bgr);
 
-	/* Only in Test, Quit game after Finish.
-	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(this, 0);
-	UKismetSystemLibrary::QuitGame(_world, PlayerController, EQuitPreference::Quit, true);
-	*/
-
 	// Tell us the file convent finish.
 	OnRecordFinish.Broadcast(FileAddr);
 }
@@ -288,7 +275,6 @@ void UFFmpegDirector::AddEndFunction()
 // 	if(GameMode == EWorldType::PIE)
 // 		FEditorDelegates::EndPIE.AddUObject(this, &UFFmpegDirector::EndWindowReader);
 
-	// Modify: Stop Recorder when get enough frame.
 }
 
 void UFFmpegDirector::AddTickFunction()
@@ -300,7 +286,7 @@ void UFFmpegDirector::GetScreenVideoData()
 {
 	FRHICommandListImmediate& list = GRHICommandList.GetImmediateCommandList();
 	
-	// Panic: FRHICommandListImmediate::LockTexture2D() will cause crash in DirectX 12, use DirectX 11.
+	// FRHICommandListImmediate::LockTexture2D() will cause crash in DirectX 12, use DirectX 11.
 	uint8* TextureData = (uint8*)list.LockTexture2D(GameTexture->GetTexture2D(), 0, EResourceLockMode::RLM_ReadOnly, LolStride, false);
 	
 	if(Runnable)
