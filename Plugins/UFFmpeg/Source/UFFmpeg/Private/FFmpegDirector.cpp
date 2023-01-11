@@ -500,11 +500,19 @@ void UFFmpegDirector::Encode_Audio_Frame(uint8_t *rgb)
 	audio_frame->data[1] = (uint8_t*)outs[1];
 	Set_Audio_Volume(audio_frame);
 
-	/*if (avcodec_encode_audio2(audio_encoder_codec_context, audio_pkt, audio_frame, &got_output) < 0)
+	if (avcodec_send_frame(audio_encoder_codec_context, audio_frame) < 0)
 	{
 		check(false);
-	}*/
-	if (got_output)
+	}
+
+	// avcodec_receive_packet() will return EAGAIN(11) if frame data is not enough, the call will not fail with EAGAIN
+	got_output = avcodec_receive_packet(audio_encoder_codec_context, audio_pkt);
+	if (got_output < 0 && got_output != -11)
+	{
+		check(false);
+	}
+
+	if (audio_pkt->size != 0)
 	{
 		audio_pkt->pts = audio_pkt->dts = av_rescale_q(
 			(CurrentAuidoTime + audio_delay) / av_q2d({ 1,48000 }),

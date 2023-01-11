@@ -7,6 +7,9 @@ Intermediate
 package
 Saved
 
+#Visual Studio Code Cash folder
+.vscode
+
 #Visual Studio Cash folder
 .vs
 *.exe
