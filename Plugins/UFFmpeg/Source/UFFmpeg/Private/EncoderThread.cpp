@@ -97,6 +97,37 @@ bool FEncoderThread::InsertVideo(uint8* Src)
 	return true;
 }
 
+
+bool FEncoderThread::InsertVideo(TArray<FColor> Data)
+{
+	if (!videobuffer_queue)
+		return false;
+	{
+		FScopeLock ScopeLock(&VideoBufferMutex);
+
+		uint8* TData = (uint8*)FMemory::Malloc(sizeof(uint8)*Data.Num());
+
+		TArray<uint32> cd;
+		for (int i = 0; i < Data.Num(); i++)
+		{
+			FColor c = FColor::MakeRandomColor();
+			//( A << 24 ) | ( B << 16 ) | ( G << 8 ) | ( R << 0 )	A2B10G10R10
+			cd.Emplace((c.A << 0) | (c.B << 22) | (c.G << 12) | (c.R << 2));
+			*TData = (uint8)((c.A << 0) | (c.B << 22) | (c.G << 12) | (c.R << 2));
+			TData++;
+		}
+		uint8* TextureData = (uint8*)cd.GetData();
+
+		while (!videobuffer_queue->InsertEncodeData(TextureData))
+		{
+			//GEngine->AddOnScreenDebugMessage(-1, 0.02f, FColor::Red, FString("video  now  encode"));
+			videobuffer_queue->PrcessEncodeData();
+			EncodeVideo();
+		}
+	}
+	return true;
+}
+
 bool FEncoderThread::InsertAudio(uint8* Src, uint8* time)
 {
 	if (!audio_queue)

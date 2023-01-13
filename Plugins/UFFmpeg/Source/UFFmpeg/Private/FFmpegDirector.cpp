@@ -116,7 +116,7 @@ void UFFmpegDirector::Initialize_Director(UWorld* World, int32 VideoLength, FStr
 	audio_delay = AudioDelay;
 	video_fps = VideoFps;
 	Video_Tick_Time = float(1) / float(video_fps);
-	TotalFrame = (VideoLength + 1) * VideoFps;
+	TotalFrame = VideoLength * VideoFps;
 	FrameCount = 0;
 	FD_world = World;
 	audio_volume = SoundVolume;
@@ -285,14 +285,43 @@ void UFFmpegDirector::AddTickFunction()
 void UFFmpegDirector::GetScreenVideoData()
 {
 	FRHICommandListImmediate& list = GRHICommandList.GetImmediateCommandList();
-	
-	// FRHICommandListImmediate::LockTexture2D() will cause crash in DirectX 12, use DirectX 11.
-	uint8* TextureData = (uint8*)list.LockTexture2D(GameTexture->GetTexture2D(), 0, EResourceLockMode::RLM_ReadOnly, LolStride, false);
-	
-	if(Runnable)
-		Runnable->InsertVideo(TextureData);
-	list.UnlockTexture2D(GameTexture, 0, false);
 
+	FString RHIName = GDynamicRHI->GetName();
+
+	// DirectX 11
+	// FRHICommandListImmediate::LockTexture2D() will cause crash in DirectX 12, use DirectX 11.
+	if (RHIName == "D3D11")
+	{
+		uint8* TextureData = (uint8*)list.LockTexture2D(GameTexture->GetTexture2D(), 0, EResourceLockMode::RLM_ReadOnly, LolStride, false);
+		if (Runnable)
+			Runnable->InsertVideo(TextureData);
+		list.UnlockTexture2D(GameTexture, 0, false);
+	}
+	// DirectX 11 end
+
+	// DirectX 12
+	// Not Work For Now!!
+	// Too slow, and can't get currect image
+	if (RHIName == "D3D12")
+	{
+		FIntRect Rect(0, 0, GameTexture->GetSizeX(), GameTexture->GetSizeY());
+		TArray<FColor> Data;
+		list.ReadSurfaceData(GameTexture, Rect, Data, FReadSurfaceDataFlags());
+		
+		if (Runnable)
+			Runnable->InsertVideo(MoveTemp(Data),Rect);
+	}
+
+	// DirectX 12 end
+
+	// Vulcan
+
+	if (RHIName == "Vulcan")
+	{
+		
+	}
+
+	// Vulcan end
 	
 }
 
