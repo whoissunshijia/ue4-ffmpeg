@@ -19,6 +19,8 @@
 #include "RHI.h"
 #include "Misc/CoreDelegates.h"
 #include "GameDelegates.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
 #include "D3D12RHI.h"
 #include <Kismet/GameplayStatics.h>
 
@@ -290,7 +292,7 @@ void UFFmpegDirector::GetScreenVideoData()
 
 	// DirectX 11
 	// FRHICommandListImmediate::LockTexture2D() will cause crash in DirectX 12, use DirectX 11.
-	if (RHIName == "D3D11")
+	if (RHIName == TEXT("D3D11"))
 	{
 		uint8* TextureData = (uint8*)list.LockTexture2D(GameTexture->GetTexture2D(), 0, EResourceLockMode::RLM_ReadOnly, LolStride, false);
 		if (Runnable)
@@ -299,30 +301,38 @@ void UFFmpegDirector::GetScreenVideoData()
 	}
 	// DirectX 11 end
 
-	// DirectX 12
-	// Not Work For Now!!
-	// Too slow, and can't get currect image
-	if (RHIName == "D3D12")
+	// DirectX 12 & Vulkan
+	if (RHIName == TEXT("D3D12") || RHIName == TEXT("Vulkan"))
 	{
 		FIntRect Rect(0, 0, GameTexture->GetSizeX(), GameTexture->GetSizeY());
 		TArray<FColor> Data;
+
 		list.ReadSurfaceData(GameTexture, Rect, Data, FReadSurfaceDataFlags());
+
+		uint32* TextureData = (uint32*)FMemory::Malloc(4 * Rect.Width() * Rect.Height());
 		
+		uint32* RowFlag = TextureData;
+		// Unsure but it work, I don't know why
+		LolStride = width*4;
+
+		for (int row = 0; row < Rect.Height(); row++)
+		{
+			uint32* ColFlag = RowFlag;
+			for (int col = 0; col < Rect.Width(); col++)
+			{
+				FColor c = Data[(row * Rect.Width()) + col];
+				*ColFlag = (c.A << 0) | (c.B << 22) | (c.G << 12) | (c.R << 2);
+				++ColFlag;
+			}
+			RowFlag += Rect.Width();
+		}
+
 		if (Runnable)
-			Runnable->InsertVideo(MoveTemp(Data),Rect);
+			Runnable->InsertVideo((uint8*)TextureData);
 	}
 
-	// DirectX 12 end
+	// DirectX 12 & Vulkan end
 
-	// Vulcan
-
-	if (RHIName == "Vulcan")
-	{
-		
-	}
-
-	// Vulcan end
-	
 }
 
 void UFFmpegDirector::CreateEncodeThread()
@@ -559,8 +569,7 @@ void UFFmpegDirector::Encode_Video_Frame(uint8_t *rgb)
 		for (Col = 0; Col < width; ++Col)
 		{
 			uint32 EncodedPixel = *PixelPtr;
-			//	AV_PIX_FMT_BGR24	这里暂时转换为BGR
-			//	AV_PIX_FMT_RGB24	掉帧严重 暂时不知道为什么
+			//	AV_PIX_FMT_BGR24
 			*(buff_bgr + 2) = (EncodedPixel >> 2) & 0xFF;
 			*(buff_bgr + 1) = (EncodedPixel >> 12) & 0xFF;
 			*(buff_bgr) = (EncodedPixel >> 22) & 0xFF;

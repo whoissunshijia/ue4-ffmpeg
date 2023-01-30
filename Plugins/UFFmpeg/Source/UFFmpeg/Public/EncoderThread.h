@@ -30,7 +30,6 @@ public:
 	EncodeDelegate& GetAudioTimeProcessDelegate();
 
 	bool InsertVideo(uint8* Src);
-	bool InsertVideo(TArray<FColor> Data);
 	bool InsertAudio(uint8* Src,uint8* time);
 
 	FCriticalSection VideoBufferMutex;
